@@ -3,18 +3,21 @@
 #include <EEPROM.h>
 #include <LiquidCrystal.h>
 
+
 /*Chip select pin can be connected to D10 or D9 which is hareware optional*/
+#define MYDEBUG 1
 #define PN532_CS 10
 PN532 nfc(PN532_CS);
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
 // default key
-#define KEY_LIST_LENGTH 4
-uint8_t keyList[KEY_LIST_LENGTH][6] = {
+#define KEY_LIST_LENGTH 5
+static uint8_t keyList[KEY_LIST_LENGTH][6] = {
   {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
   {0x01, 0x33, 0x03, 0x03, 0x23, 0x23},
   {0x0A, 0xCB, 0xC8, 0x5D, 0x55, 0x81},
-  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+  {0xA9, 0xDE, 0x7F, 0x3C, 0xEB, 0x1F}
 };
 
 #define btnRIGHT  0
@@ -23,6 +26,7 @@ uint8_t keyList[KEY_LIST_LENGTH][6] = {
 #define btnLEFT   3
 #define btnSELECT 4
 #define btnNONE  -1
+
 
 
 int _read_buttons()
@@ -36,9 +40,115 @@ int _read_buttons()
   return btnNONE;
 }
 
-int GetKey()
-{
+uint8_t KeyA_Seq[16];
+uint8_t KeyB_Seq[16];
+uint8_t AclBytes[16][3];
 
+bool GetKeySeq()
+{
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Getting KeySeq.");
+  lcd.setCursor(0,1);
+
+  uint32_t id;
+  id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+  if(id == 0)
+  {
+    return false;
+  }
+  for(uint8_t sectorn=0; sectorn<16; sectorn++)
+  {
+    lcd.print("*");
+
+    bool authA=false;
+    bool authB=false;
+    for(uint8_t key=0; key<KEY_LIST_LENGTH; key++)
+    {
+
+      uint8_t blockn=(sectorn+1)*4-1;
+
+      if(!authA && nfc.authenticateBlock(1,id,blockn,KEY_A,keyList[key]))
+      {
+        KeyA_Seq[sectorn]=key;
+        authA=true;
+
+        uint8_t block[16];
+        if(nfc.readMemoryBlock(1, blockn, block))
+        {
+          for(uint8_t k=0; k<3; k++){
+              AclBytes[sectorn][k]=block[k+6];
+          }
+        }
+        else
+        {
+          ErrorReport(blockn,"Read Fail!      ");
+          return false;
+        }
+
+        #ifdef MYDEBUG
+        for (uint8_t j = 0; j < 6; j++)
+        {
+          if(keyList[key][j]<=0x0F)
+          {
+            Serial.print("0");
+          }
+          Serial.print(keyList[key][j], HEX);
+          Serial.print(" ");
+        }
+        Serial.print("| KEY_A | Sector ");
+        Serial.println(sectorn);
+        #endif
+      }
+      else
+      {
+        id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+        if(id == 0){
+          Serial.println("NO TAG FOUND!");
+          return false;
+        } 
+      }
+      if(!authB && nfc.authenticateBlock(1,id,blockn,KEY_B,keyList[key]))
+      {
+        KeyB_Seq[blockn]=key;
+        authB=true;
+
+        #ifdef MYDEBUG
+        for (uint8_t k = 0; k < 6; k++)
+        {
+          if(keyList[key][k]<=0x0F)
+          {
+            Serial.print("0");
+          }
+          Serial.print(keyList[key][k], HEX);
+          Serial.print(" ");
+        }
+        Serial.print("| KEY_B | Sector ");
+        Serial.println(sectorn);
+        #endif
+      }
+      else
+      {
+        id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+        if(id == 0){
+          Serial.println("NO TAG FOUND!");
+          return false;
+        }
+      }
+      if(authA && authB){
+        Serial.println("ALL!");
+        break;
+      }
+    }
+    if(authA==false || authB==false) {
+      lcd.clear();
+      Serial.println("NO KEY FOUND!");
+      return false;
+    }
+  }
+  Serial.println("KeySeq Found!");
+  
+  return true;
 }
 
 #define  NFC_DEMO_DEBUG 1
@@ -51,10 +161,10 @@ bool lastWriteSuccess = false;
 void setup(void)
 {
 
-#ifdef NFC_DEMO_DEBUG
+  #ifdef NFC_DEMO_DEBUG
   Serial.begin(9600);
   Serial.println("Hello!");
-#endif
+  #endif
 
   nfc.begin();
   lcd.begin(16, 2);
@@ -67,16 +177,16 @@ void setup(void)
   if (! versiondata)
   {
 
-#ifdef NFC_DEMO_DEBUG
+    #ifdef NFC_DEMO_DEBUG
     Serial.print("Didn't find PN53x board");
-#endif
+    #endif
     lcd.setCursor(0, 1);
     lcd.print("PN53x NOT Found!");
     while (1); // halt
   }
 
 
-#ifdef NFC_DEMO_DEBUG
+  #ifdef NFC_DEMO_DEBUG
   // Got ok data, print it out!
   Serial.print("Found chip PN5");
   Serial.println((versiondata >> 24) & 0xFF, HEX);
@@ -86,14 +196,14 @@ void setup(void)
   Serial.println((versiondata >> 8) & 0xFF, DEC);
   Serial.print("Supports ");
   Serial.println(versiondata & 0xFF, HEX);
-#endif
+  #endif
 
   lcd.setCursor(0, 1);
   lcd.print("FOUND CHIP PN53x");
-  delay(1500);
+  delay(1000);
   lcd.setCursor(0, 1);
   lcd.print("Firmware ver.1.0");
-  delay(2500);
+  delay(1000);
   // configure board to read RFID tags and cards
   nfc.SAMConfig();
 
@@ -112,7 +222,7 @@ void DebugEEPROM()
     lcd.print("*");
 
     uint8_t block[16];
-    for (int j = 0; j < 16; j++) {
+    for (uint8_t j = 0; j < 16; j++) {
       block[j] = EEPROM.read(addr);
       addr++;
     }
@@ -160,11 +270,13 @@ void DebugEEPROM()
 
 void WaitForReturn()
 {
+  Serial.println("Test!!!!!!!!!!");
   while (1) {
-    if ( _read_buttons() == btnSELECT) //SELECT
+    if ( _read_buttons() == btnSELECT){ //SELECT
       delay(50);
-    if ( _read_buttons() == btnNONE) {
-      return;
+      if ( _read_buttons() == btnNONE) {
+        return;
+      }
     }
   }
 }
@@ -176,31 +288,146 @@ void ReturnToMenu(void)
   lcd.print("Finished!!!     ");
   lcd.setCursor(0, 1);
   lcd.print("Return in   sec.");
-  for (int i = 3; i >= 0;  i--) {
+  for (int i = 3; i >= 0;  i--){
     lcd.setCursor(10, 1);
     lcd.print(i, DEC);
     delay(1000);
-    return;
   }
+  return;
 }
+
+// uint8_t KeyA_List[16][6];
+// uint8_t KeyB_List[16][6];
+// void ReadKeyFromEEPROM()
+// {
+//   for(int sector=0; sector<16; sector++){
+//     blockn=(sector+1)*4-1
+//     addr=blockn*16;
+//     for(int i=0; i<6; i++){
+//       KeyA_List[sector][i]=EEPROM.read(addr+i);
+//       KeyB_List[sector][i]=EEPROM.read(addr+4+i);
+//     }
+//   }
+//   #ifdef MYDEBUG
+//   Serial.println();
+//   for(int j=0; j<16; j++){
+//     Serial.print("Sector ");
+//     Serial.print(j);
+//     Serial.print(" | KEY_A:");
+//     for(int k=0; k<6; k++){
+//       if(KeyA_List[i][k]<=0x0F)
+//       {
+//         Serial.print("0");
+//       }
+//       Serial.print(KeyA_List[i][k], HEX);
+//       Serial.print(" ");
+//     }
+//     Serial.print(" | KEY_B:");
+//     for(int k=0; k<6; k++){
+//       if(KeyB_List[i][k]<=0x0F)
+//       {
+//         Serial.print("0");
+//       }
+//       Serial.print(KeyB_List[i][k], HEX);
+//       Serial.print(" ");
+//     }
+//   }
+//   #endif
+// }
+// bool ReadKeyFromTag()
+// {
+//   uint32_t id;
+//   id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+//   if (id != 0)
+//   {
+//     Serial.println("find new tag");
+//     #ifdef NFC_DEMO_DEBUG
+//     Serial.print("Read card #");
+//     Serial.println(id);
+//     Serial.println();
+//     #endif
+
+//     lcd.clear();
+//     lcd.setCursor(0, 0);
+//     lcd.print("Get KeyA&KeyB...");
+
+//     //EEPROM Address
+//     int addr = 0;
+
+//     //ALL Blocks Except 1
+//     for (uint8_t sector = 0; sector < 16; sector++)
+//     {
+//       uint8_t blockn=(sector+1)*4-1;
+//       lcd.setCursor(sector, 1);
+//       lcd.print("*");
+//       if(nfc.authenticateBlock(1, id , blockn, KEY_A, keyList[KeyA_Seq[Sector]]))
+//       {
+//         uint8_t block[16];
+//         if (nfc.readMemoryBlock(1, blockn, block))
+//         {
+//           //Each Bytes
+//           for (uint8_t i = 0; i < 6; j++)
+//           {
+//             KeyA_List[sector][i]=block[i];
+//             KeyB_List[sector][i]=block[i+4);
+//           }
+//         }
+//         else{
+//           ErrorReport(blockn,"Read Fail!      ");
+//           return false;
+//         }
+//       }
+//       else{
+//         ErrorReport(blockn,"Auth Fail!      ");
+//         return false;
+//       }
+//     }
+
+//     #ifdef MYDEBUG
+//     Serial.println();
+//     for(uint8_t j=0; j<16; j++){
+//       Serial.print("Sector ");
+//       Serial.print(j);
+//       Serial.print(" | KEY_A:");
+//       for(uint8_t k=0; k<6; k++){
+//         if(KeyA_List[i][k]<=0x0F)
+//         {
+//           Serial.print("0");
+//         }
+//         Serial.print(KeyA_List[i][k], HEX);
+//         Serial.print(" ");
+//       }
+//       Serial.print(" | KEY_B:");
+//       for(uint8_t k=0; k<6; k++){
+//         if(KeyB_List[i][k]<=0x0F)
+//         {
+//           Serial.print("0");
+//         }
+//         Serial.print(KeyB_List[i][k], HEX);
+//         Serial.print(" ");
+//       }
+//     }
+//     #endif
+
+//     Serial.println("KEY_A and KEY_B have been saved!");
+//     return true;
+//   }
+//   Serial.println("No Tag Found! ");
+//   return false;
+// }
+
+
 void WriteToTag(void)
 {
   uint32_t id;
   id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
   if (id != 0)
   {
-    if (id == lastWriteTag && lastWriteSuccess)
-    {
-      return;
-    }
-    Serial.println("find new tag");
-    lastWriteTag = id;
-    lastWriteSuccess = false;
-#ifdef NFC_DEMO_DEBUG
+    #ifdef NFC_DEMO_DEBUG
     Serial.print("Read card #");
     Serial.println(id);
     Serial.println();
-#endif
+    #endif
 
     //EEPROM Address
     int addr;
@@ -216,23 +443,23 @@ void WriteToTag(void)
       switch (_read_buttons())
       {
         case btnRIGHT:
-          if (_read_buttons() == btnNONE) {
-            blockn_start = 1;
-            addr = 16;
-            flag = false;
-          }
-          break;
+        if (_read_buttons() == btnNONE) {
+          blockn_start = 1;
+          addr = 16;
+          flag = false;
+        }
+        break;
         case btnLEFT:
-          if (_read_buttons() == btnNONE) {
-            blockn_start = 0;
-            addr = 0;
-            flag = false;
-          }
-          break;
+        if (_read_buttons() == btnNONE) {
+          blockn_start = 0;
+          addr = 0;
+          flag = false;
+        }
+        break;
         case btnSELECT:
-          if (_read_buttons() == btnNONE) {
-            return;
-          }
+        if (_read_buttons() == btnNONE) {
+          return;
+        }
       }
     }
     lcd.clear();
@@ -256,7 +483,7 @@ void WriteToTag(void)
         Serial.println(i);
 
         //Try Auth
-        if (nfc.authenticateBlock(1, id , blockn, KEY_A, keyList[i]))
+        if (nfc.authenticateBlock(1, id , blockn,KEY_A, keyList[i]))
         {
           Serial.println("Auth success,try to Write");
 
@@ -316,29 +543,31 @@ void WriteToTag(void)
 }
 
 
+void ErrorReport(uint8_t blockn,char *msg)
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("ERROR!  Block ");
+  lcd.print(blockn, DEC);
+  lcd.setCursor(0, 1);
+  lcd.print(msg);
+  WaitForReturn();
+  return;
+}
 
 void ReadAndSave(void)
 {
-  bool tag = false;
   // look for MiFare type cards
   uint32_t id;
   id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
-  Serial.println("test2");
   if (id != 0)
   {
-    if (id == lastReadTag && lastReadSuccess)
-    {
-      return;
-    }
-    tag = true;
     Serial.println("find new tag");
-    lastReadTag = id;
-    lastReadSuccess = false;
-#ifdef NFC_DEMO_DEBUG
+    #ifdef NFC_DEMO_DEBUG
     Serial.print("Read card #");
     Serial.println(id);
     Serial.println();
-#endif
+    #endif
 
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -346,106 +575,87 @@ void ReadAndSave(void)
 
     //EEPROM Address
     int addr = 0;
+
     //ALL Blocks Except 1
     for (uint8_t blockn = 0; blockn < 64; blockn++)
     {
-      lcd.setCursor(blockn / 4, 1);
+      lcd.setCursor(blockn/4, 1);
       lcd.print("*");
-      bool auth = false;
-
-      Serial.print("try to read Block");
+      
+      Serial.print("Try to Read Block ");
       Serial.println(blockn);
 
-      //Try Default keys
-      for (int i = 0; i < KEY_LIST_LENGTH; i++)
+      if(nfc.authenticateBlock(1, id , blockn, KEY_A, keyList[KeyA_Seq[blockn/4]]))
       {
-        Serial.print("Try key: ");
-        Serial.println(i);
-        for (int k = 0; k < 6; k++)
+        uint8_t block[16];
+        if (nfc.readMemoryBlock(1, blockn, block))
         {
-          if(keyList[i][k]<=0x0F){
-            Serial.print("0");
-          }
-          Serial.print(keyList[i][k], HEX);
-          Serial.print(" ");
-        }
-        Serial.println();
-        //Try Auth
-        if (blockn == 40)
-        {
-          i = 2;
-        }
-        if (nfc.authenticateBlock(1, id , blockn, KEY_A, keyList[i]))
-        {
-          Serial.println("Auth success,try to read");
-
-          //Read Block
-          uint8_t block[16];
-          if (nfc.readMemoryBlock(1, blockn, block))
+          //Each Bytes
+          for (int j = 0; j < 16; j++)
           {
+            //Write to EEPROM
+            EEPROM.write(addr, block[j]);
+            addr++;
+          }
 
-            Serial.println("Read success,try to save");
-
-            //Each Bytes
-            for (int j = 0; j < 16; j++)
+          #ifdef NFC_DEMO_DEBUG
+            //if read operation is successful
+            for (uint8_t i = 0; i < 16; i++)
             {
-              //Write to EEPROM
-              EEPROM.write(addr, block[j]);
-              addr++;
+              if (block[i] <= 0xF) Serial.print("0");
+              Serial.print(block[i], HEX);
+              Serial.print(" ");
             }
 
-            Serial.println("save success,try another Block");
+            Serial.print("| Block ");
 
-            //If auth succeed,there is no need to try another key.
-            auth = true;
-            break;
+            if (blockn <= 9){
+              Serial.print(" ");
+            } //Data arrangement / beautify
+            
+            Serial.print(blockn, DEC);
+            Serial.print(" | ");
+
+            if (blockn == 0){
+              Serial.println("Manufacturer Block");
+            }
+            
+            else if (((blockn + 1) % 4) == 0){
+              Serial.println("Sector Trailer");
+            }
+
+            else{
+              Serial.println("Data Block");
+            }
+            #endif
           }
           else
           {
-            Serial.println("Read Fail");
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("ERROR!  Block ");
-            lcd.print(blockn, DEC);
-            lcd.setCursor(0, 1);
-            lcd.print("Read Fail!  R?");
-            WaitForReturn();
+            ErrorReport(blockn,"Read Fail!      ");
             return;
           }
         }
-        Serial.println("Auth Fail,Try Another Key");
-        id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
-        Serial.println();
+        else
+        {
+          ErrorReport(blockn,"Auth Fail!      ");
+          return;
+        }
       }
-      if (auth == false)
-      {
-        Serial.println("All keys have been tried!");
-        //All keys have been tried!
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("ERROR!  Block ");
-        lcd.print(blockn, DEC);
-        lcd.setCursor(0, 1);
-        lcd.print("No Key Found! ");
-        WaitForReturn();
-        return;
-      }
+      Serial.println("All the blocks have been saved");
+      ReturnToMenu();
+      return;
     }
-    //all the blocks have been saved
-    lastReadSuccess = true;
-    Serial.println("all the blocks have been saved");
-    ReturnToMenu();
-    return;
+    else
+    {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("No Tag Found! ");
+      delay(1500);
+    }
   }
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("No Tag Found! ");
-  delay(1000);
-  return;
-}
 
-void loop(void)
-{
+  void loop(void)
+  {
   //Serial.println("Test1");
   lcd.setCursor(0, 0);
   lcd.print("UP:  Read & Save");
@@ -454,27 +664,35 @@ void loop(void)
   switch (_read_buttons())
   {
     case btnUP:
-      delay(50);
-      if (_read_buttons() == btnNONE) {
-        Serial.println("key up pressed");
-        ReadAndSave();
-      }
-      break;
+    delay(50);
+    if (_read_buttons() == btnNONE) {
+      Serial.println("key up pressed");
+      //if(GetReadKeySeq()){
+        //ReadAndSave();
+      //}
+      GetKeySeq();
+    }
+    break;
     case btnDOWN:
-      delay(50);
-      if (_read_buttons() == btnNONE) {
-        Serial.println("key down pressed");
-        WriteToTag();
+    delay(50);
+    if (_read_buttons() == btnNONE) {
+      Serial.println("key down pressed");
+      WriteToTag();
         //DebugEEPROM();
       }
       break;
-    case btnRIGHT:
+      case btnRIGHT:
       delay(50);
       if (_read_buttons() == btnNONE) {
         Serial.println("key right pressed");
         //WriteToTag();
-        DebugEEPROM();
+        //DebugEEPROM();
+        if(GetKeySeq()){
+          Serial.println("succeed");
+        }
+        Serial.println("Fail");
+        lcd.clear();
       }
       break;
+    }
   }
-}
