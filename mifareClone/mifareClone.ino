@@ -12,9 +12,9 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 #define KEY_LIST_LENGTH 5
 static uint8_t keyList[KEY_LIST_LENGTH][6] = {
   {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-  {0x01, 0x33, 0x03, 0x03, 0x23, 0x23},
-  {0x0A, 0xCB, 0xC8, 0x5D, 0x55, 0x81},
   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+  {0x0A, 0xCB, 0xC8, 0x5D, 0x55, 0x81},
+  {0x01, 0x33, 0x03, 0x03, 0x23, 0x23},
   {0xA9, 0xDE, 0x7F, 0x3C, 0xEB, 0x1F}
 };
 
@@ -347,6 +347,244 @@ void setup(void) {
   nfc.SAMConfig();
 }
 
+// bool GetKeySeq(){
+//   lcd.clear();
+//   lcd.setCursor(0,0);
+//   lcd.print("Getting KeySeq.");
+//   lcd.setCursor(0,1);
+
+//   uint32_t id;
+//   id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+//   if(id == 0)
+//   {
+//     return false;
+//   }
+//   for(uint8_t sectorn=0; sectorn<16; sectorn++)
+//   {
+//     lcd.print("*");
+
+//     bool authA=false;
+//     bool authB=false;
+//     for(uint8_t key=0; key<KEY_LIST_LENGTH; key++)
+//     {
+
+//       uint8_t blockn=(sectorn+1)*4-1;
+
+//       if(!authA && nfc.authenticateBlock(1,id,blockn,KEY_A,keyList[key]))
+//       {
+//         KEY_A_SEQ[sectorn]=key;
+//         authA=true;
+
+//         uint8_t block[16];
+//         if(nfc.readMemoryBlock(1, blockn, block))
+//         {
+//           for(uint8_t k=0; k<4; k++){
+//               ACL_BITS[sectorn][k]=block[k+6];
+//           }
+//         }
+//         else
+//         {
+//           ErrorReport(blockn,"Read Fail!      ");
+//           return false;
+//         }
+
+//         #ifdef MYDEBUG
+//         for (uint8_t j = 0; j < 6; j++)
+//         {
+//           if(keyList[key][j]<=0x0F)
+//           {
+//             Serial.print("0");
+//           }
+//           Serial.print(keyList[key][j], HEX);
+//           Serial.print(" ");
+//         }
+//         Serial.print("| KEY_A | Sector ");
+//         Serial.println(sectorn);
+//         #endif
+//       }
+//       else
+//       {
+//         id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+//         if(id == 0){
+//           Serial.println("NO TAG FOUND!");
+//           return false;
+//         } 
+//       }
+//       if(!authB && nfc.authenticateBlock(1,id,blockn,KEY_B,keyList[key]))
+//       {
+//         KEY_B_SEQ[blockn]=key;
+//         authB=true;
+
+//         #ifdef MYDEBUG
+//         for (uint8_t k = 0; k < 6; k++)
+//         {
+//           if(keyList[key][k]<=0x0F)
+//           {
+//             Serial.print("0");
+//           }
+//           Serial.print(keyList[key][k], HEX);
+//           Serial.print(" ");
+//         }
+//         Serial.print("| KEY_B | Sector ");
+//         Serial.println(sectorn);
+//         #endif
+//       }
+//       else
+//       {
+//         id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+//         if(id == 0){
+//           Serial.println("NO TAG FOUND!");
+//           return false;
+//         }
+//       }
+//       if(authA && authB){
+//         Serial.println("ALL!");
+//         break;
+//       }
+//     }
+//     if(authA==false || authB==false) {
+//       lcd.clear();
+//       Serial.println("NO KEY FOUND!");
+//       return false;
+//     }
+//   }
+//   Serial.println("KeySeq Found!");
+  
+//   return true;
+// }
+uint8_t KEY_A_SEQ[16];
+uint8_t KEY_B_SEQ[16];
+uint8_t ACL_BITS[16][4];
+bool TestKeySeq(){
+  uint32_t id;
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Test KeySeq...  ");
+  lcd.setCursor(0,1);
+  for(uint8_t i=0; i<16; i++){
+    lcd.print("*");
+    bool authA=false;
+    bool authB=false;
+    bool ACL=false;
+    for(uint8_t k=0; k<KEY_LIST_LENGTH; k++){
+      id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+      if(id==0){
+        ErrorReport(-1,"No Mifare Card! ");
+        return false;
+      }
+      if(!authA && nfc.authenticateBlock(1,id,i*4+3,KEY_A,keyList[k])){
+        Serial.println("A:Success");
+        authA=true;
+        KEY_A_SEQ[i]=k;
+        uint8_t block[16];
+        if(nfc.readMemoryBlock(1, i*4+3, block)){
+          ACL=true;
+          for(uint8_t j=0; j<4; j++){
+              ACL_BITS[i][j]=block[j+6];
+          }
+        }
+      }else if(!authA){
+        Serial.println("A:Fail");
+        id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+        if(id==0){
+          ErrorReport(-1,"No Mifare Card! ");
+          return false;
+        }
+      }
+      if(!authB && nfc.authenticateBlock(1,id,i*4+3,KEY_B,keyList[k])){
+        Serial.println("B:Success");
+        authB=true;
+        KEY_B_SEQ[i]=k;
+        uint8_t block[16];
+        if(!ACL && nfc.readMemoryBlock(1, i*4+3, block)){
+          ACL=true;
+          for(uint8_t j=0; j<4; j++){
+              ACL_BITS[i][j]=block[j+6];
+          }
+        }else if(!ACL){
+          ErrorReport(i*4+3,"ACL Failed");
+          return false;
+        }
+      }else if(!authB){
+        Serial.println("B:Fail");
+        id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+        if(id==0){
+          ErrorReport(-1,"No Mifare Card! ");
+          return false;
+        }
+      }
+      if(authA && authB){
+        break;
+      }
+    }
+    if(!authA || !authB){
+      ErrorReport(i*4+3,"No KeySeq Found!");
+      return false;
+    }
+  }
+  return true;
+}
+void NormalRead(){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Normal Read...  ");
+  lcd.setCursor(0,1);
+  uint32_t id;
+  id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+  if(id==0){
+    ErrorReport(-1,"No Mifare Card! ");
+    return;
+  }
+  int addr=0; 
+  for(uint8_t blockn=0; blockn<64; blockn++){
+    lcd.setCursor(blockn/4, 1);
+    lcd.print("*");
+    if(((blockn + 1) % 4) == 0){
+      for(uint8_t i=0; i<6; i++){
+        EEPROM.write(addr++,keyList[KEY_A_SEQ[blockn/4]][i]);
+      }
+      for(uint8_t i=0; i<4; i++){
+        EEPROM.write(addr++,ACL_BITS[blockn/4][i]);
+      }
+      for(uint8_t i=0; i<6; i++){
+        EEPROM.write(addr++,keyList[KEY_B_SEQ[blockn/4]][i]);
+      }
+    }else if(nfc.authenticateBlock(1,id,blockn,KEY_A,keyList[KEY_A_SEQ[blockn/4]])){
+      uint8_t block[16];
+      if(nfc.readMemoryBlock(1,blockn,block)){
+        for(uint8_t i=0; i<16; i++){
+          EEPROM.write(addr++,block[i]);
+        }
+      }else{
+        ErrorReport(blockn,"Read Fail!!!    ");
+        return;
+      }
+    }else{
+      id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
+      if(id==0){
+        ErrorReport(-1,"No Mifare Card! ");
+        return;
+      }
+      if(nfc.authenticateBlock(1,id,blockn,KEY_B,keyList[KEY_B_SEQ[blockn/4]])){
+        uint8_t block[16];
+        if(nfc.readMemoryBlock(1,blockn,block)){
+          for(uint8_t i=0; i<16; i++){
+            EEPROM.write(addr++,block[i]);
+          }
+        }else{
+          ErrorReport(blockn,"Read Fail!!!    ");
+          return;
+        }
+      }else{
+        ErrorReport(blockn,"Auth Fail!!!    ");
+        return;
+      }
+    }
+
+  }
+  ReturnToMenu();
+  return;
+}
 void loop(void) {
   // uint32_t id;
   // id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
@@ -358,9 +596,9 @@ void loop(void) {
   //   Serial.println("fail");
   // }
   lcd.setCursor(0, 0);
-  lcd.print("UP:  Force Read ");
+  lcd.print("U:FRead D:FWrite");
   lcd.setCursor(0, 1);
-  lcd.print("DN:  Force Write");
+  lcd.print("L:Debug R:N-Read");
   while(1){
       switch (_read_buttons())
       {
@@ -384,7 +622,20 @@ void loop(void) {
           delay(80);
           if (_read_buttons() == btnNONE) {
             Serial.println("key right pressed");
+            //ShowEEPROM();
+            //GetKeySeq();
+            if(TestKeySeq()){
+              NormalRead();
+            }
+            return;
+          }
+          break;
+        case btnLEFT://DEBUG
+          delay(80);
+          if (_read_buttons() == btnNONE) {
+            Serial.println("key left pressed");
             ShowEEPROM();
+            //GetKeySeq();
             return;
           }
           break;
