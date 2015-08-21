@@ -498,7 +498,7 @@ uint32_t PN532::readPassiveTargetID(uint8_t cardbaudrate)
     Serial.print(" 0x"); 
     Serial.print(pn532_packetbuffer[13+i], HEX);
   }
-
+  Serial.println("");
 #ifdef PN532DEBUG
   Serial.println("TargetID");
   for(uint8_t i=0;i<20;i++)
@@ -566,6 +566,9 @@ void PN532::read(uint8_t* buff, uint8_t n)
     buff[i] = read();
 #ifdef PN532DEBUG
     Serial.print(" 0x");
+    if(buff[i]<=0x0f){
+      Serial.print("0");
+    }
     Serial.print(buff[i], HEX);
 #endif
   }
@@ -604,17 +607,23 @@ void PN532::writeCommand(uint8_t* cmd, uint8_t cmd_len)
   checksum += PN532_HOSTTOPN532;
 
 #ifdef PN532DEBUG
-  Serial.print(" 0x"); 
+  Serial.print(" 0x0"); 
   Serial.print(PN532_PREAMBLE, HEX);
-  Serial.print(" 0x"); 
+  Serial.print(" 0x0"); 
   Serial.print(PN532_PREAMBLE, HEX);
   Serial.print(" 0x"); 
   Serial.print(PN532_STARTCODE2, HEX);
   Serial.print(" 0x"); 
+  if(cmd_len<=0x0f){
+  Serial.print("0");
+  }
   Serial.print(cmd_len, HEX);
-  Serial.print(" 0x"); 
+  Serial.print(" 0x");
+  if(cmdlen_1<=0x0f){
+    Serial.print("0");
+  }
   Serial.print(cmdlen_1, HEX);
-  Serial.print(" 0x"); 
+  Serial.print(" 0x");
   Serial.print(PN532_HOSTTOPN532, HEX);
 #endif
 
@@ -623,7 +632,10 @@ void PN532::writeCommand(uint8_t* cmd, uint8_t cmd_len)
     write(cmd[i]);
     checksum += cmd[i];
 #ifdef PN532DEBUG
-    Serial.print(" 0x"); 
+    Serial.print(" 0x");
+    if(cmd[i]<=0x0f){
+      Serial.print("0");
+    }
     Serial.print(cmd[i], HEX);
 #endif
   }
@@ -634,8 +646,11 @@ void PN532::writeCommand(uint8_t* cmd, uint8_t cmd_len)
 
 #ifdef PN532DEBUG
   Serial.print(" 0x"); 
+  if(checksum_1<=0x0f){
+    Serial.print("0");
+  }
   Serial.print(checksum_1, HEX);
-  Serial.print(" 0x"); 
+  Serial.print(" 0x0");
   Serial.print(PN532_POSTAMBLE, HEX);
   Serial.println();
 #endif

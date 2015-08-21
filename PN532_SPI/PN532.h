@@ -78,7 +78,7 @@ public:
 
   boolean sendCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout = 1000);
 
-private:
+//private:
   uint8_t _cs;//Chip seclect pin for PN532 is optional.
   SPIClass pn532_SPI;
 
