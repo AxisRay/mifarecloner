@@ -484,13 +484,16 @@ void BridgeMode(){
   lcd.begin(16,2);
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Bridge Mode...  ");
+  lcd.print("Transparent Mode");
   lcd.setCursor(0,1);
-  lcd.print("Press RST exit  ");
+  lcd.print("Press SELECT Rtn");
   Serial.begin(230400);  
   Serial.flush();
   nfc.begin();
   while(1){
+    if(_read_buttons()==btnSELECT){
+        return;
+    }
     int b = Serial.available();
     if (b >= 5){
       Serial.readBytes((char*)buffer, 5);
