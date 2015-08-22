@@ -6,7 +6,7 @@
 /* Modified history:                                                 */
 /* Nov 5,2012 modified by Frankie.Chu at Seeed.                      */
 /*   Add some program comments of some key functions;                */
-/*	 Modified the basic interface functions spiwrite() and spiread() */
+/*	 Modified the basic interface functions write() and read() */
 /*     to be write() and read(),and they will call the functions of  */
 /*     class SPIClass but not to simulate timing of SPI;             */
 /*	 Rename all of the functions to be like the abAbAb;              */
@@ -443,7 +443,7 @@ boolean PN532::writeMemoryBlock(uint8_t cardnumber,uint8_t blockaddress,uint8_t 
   // read data packet
   read(pn532_packetbuffer, 2+6);
 
-#ifdef PN532DEBUG
+  #ifdef PN532DEBUG
   // check some basic stuff
   Serial.println("WRITE");
   for(uint8_t i=0;i<2+6;i++)
@@ -451,7 +451,7 @@ boolean PN532::writeMemoryBlock(uint8_t cardnumber,uint8_t blockaddress,uint8_t 
     Serial.print(pn532_packetbuffer[i], HEX); 
     Serial.println(" ");
   }
-#endif
+  #endif
 
   if((pn532_packetbuffer[6] == 0x41) && (pn532_packetbuffer[7] == 0x00))
   {
@@ -478,35 +478,35 @@ uint32_t PN532::readPassiveTargetID(uint8_t cardbaudrate)
   read(pn532_packetbuffer, 20);
   // check some basic stuff
 
-  Serial.print("Found "); 
-  Serial.print(pn532_packetbuffer[7], DEC); 
-  Serial.println(" tags");
+  //Serial.print("Found "); 
+  //Serial.print(pn532_packetbuffer[7], DEC); 
+  //Serial.println(" tags");
   if (pn532_packetbuffer[7] != 1)
     return 0;
 
   uint16_t sens_res = pn532_packetbuffer[9];
   sens_res <<= 8;
   sens_res |= pn532_packetbuffer[10];
-  Serial.print("Sens Response: 0x");  
-  Serial.println(sens_res, HEX);
-  Serial.print("Sel Response: 0x");  
-  Serial.println(pn532_packetbuffer[11], HEX);
+  //Serial.print("Sens Response: 0x");  
+  //Serial.println(sens_res, HEX);
+  //Serial.print("Sel Response: 0x");  
+  //Serial.println(pn532_packetbuffer[11], HEX);
   cid = 0;
   for (uint8_t i=0; i< pn532_packetbuffer[12]; i++) {
     cid <<= 8;
     cid |= pn532_packetbuffer[13+i];
-    Serial.print(" 0x"); 
-    Serial.print(pn532_packetbuffer[13+i], HEX);
+    //Serial.print(" 0x"); 
+    //Serial.print(pn532_packetbuffer[13+i], HEX);
   }
-  Serial.println("");
-#ifdef PN532DEBUG
+  //Serial.println("");
+  #ifdef PN532DEBUG
   Serial.println("TargetID");
   for(uint8_t i=0;i<20;i++)
   {
     Serial.print(pn532_packetbuffer[i], HEX); 
     Serial.println(" ");
   }
-#endif  
+  #endif  
   return cid;
 }
 
@@ -557,20 +557,23 @@ void PN532::read(uint8_t* buff, uint8_t n)
   delay(2);
   write(PN532_SPI_DATAREAD);
 
-#ifdef PN532DEBUG
+  #ifdef PN532DEBUG
   Serial.print("Reading: ");
-#endif
+  #endif
+
   for (uint8_t i=0; i < n; i ++) 
   {
-    delay(1);
+    //delay(1);
     buff[i] = read();
-#ifdef PN532DEBUG
+
+    #ifdef PN532DEBUG
     Serial.print(" 0x");
     if(buff[i]<=0x0f){
       Serial.print("0");
     }
     Serial.print(buff[i], HEX);
-#endif
+    #endif
+
   }
 
 #ifdef PN532DEBUG
@@ -656,4 +659,113 @@ void PN532::writeCommand(uint8_t* cmd, uint8_t cmd_len)
 #endif
 } 
 
+
+/*********************Extern***************/
+// default timeout of one second
+uint8_t PN532::sendRawCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout) {
+  uint16_t timer = 0;
+
+  // write the command
+  spiwriteraw(cmd, cmdlen);
+
+  // Wait for chip to say its ready!
+  while (readSpiStatus() != PN532_SPI_READY) {
+    if (timeout != 0) {
+      timer+=10;
+      if (timer > timeout)
+        return 0xF1;
+    }
+    delay(10);
+  }
+
+  // read acknowledgement
+  uint8_t ack[6] = { 0 };
+  spi_readack(ack);
+  //send ack to uart
+  Serial.write(ack, 6);
+
+  // Wait for chip to say its ready!
+  timer = 0;
+  while (readSpiStatus() != PN532_SPI_READY) {
+    if (timeout != 0) {
+      timer+=10;
+      if (timer > timeout)
+        return 0xF2;
+    }
+    delay(10);
+  }
+
+  return 0; // ack'd command
+}
+
+void PN532::readRawCommandAnswer(uint8_t *cmd, uint8_t cmdlen){
+  uint8_t size = 0;
+  readspidataAnswer(pn532_packetbuffer, size);
+  if((pn532_packetbuffer[0] == 0) && (pn532_packetbuffer[1] == 0)){
+    //packet length is the first byte after 0x00 0x00 0xff
+    Serial.write(pn532_packetbuffer, size);
+  }else{
+    //hack this should never happen but sometime the first 
+    //null byte is missing :(
+    //don't know why i don't receive the first 0x00
+    //packet length is the first byte after 0x00 0x00 0xff
+    Serial.write((uint8_t)0x00);
+    Serial.write(pn532_packetbuffer, size - 1);
+  }
+  delay(5);
+}
+void PN532::spi_readack(uint8_t* ack){
+  readspidata(ack, 6);
+}
+
+void PN532::readspidata(uint8_t* buff, uint8_t n) {
+  digitalWrite(_cs, LOW);
+  delay(2);
+  write(PN532_SPI_DATAREAD);
+
+  for (uint8_t i=0; i<n; i++) {
+    //delay(1);
+    buff[i] = read();
+  }
+
+  digitalWrite(_cs, HIGH);
+}
+
+void PN532::readspidataAnswer(uint8_t* buff, uint8_t& n) {
+  digitalWrite(_cs, LOW);
+  delay(2);
+  write(PN532_SPI_DATAREAD);
+
+  for (uint8_t i=0; i<5; i++) {
+    delay(1);
+    buff[i] = read();
+  }
+  if(buff[2] == 0xff)
+    n = 5 + buff[3] + 2;
+  else
+    //hack this should never happen but sometime the first 
+    //null byte is missing :(
+    //don't know why i don't receive the first 0x00
+    n = 5 + buff[2] + 2;
+    
+  for (uint8_t i=5; i<n; i++) {
+    delay(1);
+    buff[i] = read();
+  }
+  
+  digitalWrite(_cs, HIGH);
+}
+
+void PN532::spiwriteraw(uint8_t* raw, uint8_t cmdlen) {
+
+  digitalWrite(_cs, LOW);
+  delay(2);     // or whatever the delay is for waking up the board
+  write(PN532_SPI_DATAWRITE);
+
+  for (uint8_t i=0; i<cmdlen; i++) {
+    write(raw[i]);
+  }
+
+  digitalWrite(_cs, HIGH);
+}
 

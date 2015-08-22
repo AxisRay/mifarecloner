@@ -88,6 +88,14 @@ public:
   boolean checkSpiAck();
   void read(uint8_t* buff, uint8_t n);
   void writeCommand(uint8_t* cmd, uint8_t cmdlen);
+
+  /****************extern*************/
+  uint8_t sendRawCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout=1000);
+  void readRawCommandAnswer(uint8_t *cmd, uint8_t cmdlen);
+  void spi_readack(uint8_t* ack);
+  void readspidata(uint8_t* buff, uint8_t n);
+  void readspidataAnswer(uint8_t* buff, uint8_t& n) ;
+  void spiwriteraw(uint8_t* raw, uint8_t cmdlen);
 };
 
 #endif

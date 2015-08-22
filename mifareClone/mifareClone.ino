@@ -306,8 +306,11 @@ void ForceWrite(){
   return;
 }
 void setup(void) {
+  if(_read_buttons()==btnNONE){
+    BridgeMode();
+  }
   #ifdef NFC_DEMO_DEBUG
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println("Hello!");
   #endif
   nfc.begin();
@@ -347,111 +350,6 @@ void setup(void) {
   nfc.SAMConfig();
 }
 
-// bool GetKeySeq(){
-//   lcd.clear();
-//   lcd.setCursor(0,0);
-//   lcd.print("Getting KeySeq.");
-//   lcd.setCursor(0,1);
-
-//   uint32_t id;
-//   id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
-//   if(id == 0)
-//   {
-//     return false;
-//   }
-//   for(uint8_t sectorn=0; sectorn<16; sectorn++)
-//   {
-//     lcd.print("*");
-
-//     bool authA=false;
-//     bool authB=false;
-//     for(uint8_t key=0; key<KEY_LIST_LENGTH; key++)
-//     {
-
-//       uint8_t blockn=(sectorn+1)*4-1;
-
-//       if(!authA && nfc.authenticateBlock(1,id,blockn,KEY_A,keyList[key]))
-//       {
-//         KEY_A_SEQ[sectorn]=key;
-//         authA=true;
-
-//         uint8_t block[16];
-//         if(nfc.readMemoryBlock(1, blockn, block))
-//         {
-//           for(uint8_t k=0; k<4; k++){
-//               ACL_BITS[sectorn][k]=block[k+6];
-//           }
-//         }
-//         else
-//         {
-//           ErrorReport(blockn,"Read Fail!      ");
-//           return false;
-//         }
-
-//         #ifdef MYDEBUG
-//         for (uint8_t j = 0; j < 6; j++)
-//         {
-//           if(keyList[key][j]<=0x0F)
-//           {
-//             Serial.print("0");
-//           }
-//           Serial.print(keyList[key][j], HEX);
-//           Serial.print(" ");
-//         }
-//         Serial.print("| KEY_A | Sector ");
-//         Serial.println(sectorn);
-//         #endif
-//       }
-//       else
-//       {
-//         id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
-//         if(id == 0){
-//           Serial.println("NO TAG FOUND!");
-//           return false;
-//         } 
-//       }
-//       if(!authB && nfc.authenticateBlock(1,id,blockn,KEY_B,keyList[key]))
-//       {
-//         KEY_B_SEQ[blockn]=key;
-//         authB=true;
-
-//         #ifdef MYDEBUG
-//         for (uint8_t k = 0; k < 6; k++)
-//         {
-//           if(keyList[key][k]<=0x0F)
-//           {
-//             Serial.print("0");
-//           }
-//           Serial.print(keyList[key][k], HEX);
-//           Serial.print(" ");
-//         }
-//         Serial.print("| KEY_B | Sector ");
-//         Serial.println(sectorn);
-//         #endif
-//       }
-//       else
-//       {
-//         id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
-//         if(id == 0){
-//           Serial.println("NO TAG FOUND!");
-//           return false;
-//         }
-//       }
-//       if(authA && authB){
-//         Serial.println("ALL!");
-//         break;
-//       }
-//     }
-//     if(authA==false || authB==false) {
-//       lcd.clear();
-//       Serial.println("NO KEY FOUND!");
-//       return false;
-//     }
-//   }
-//   Serial.println("KeySeq Found!");
-  
-//   return true;
-// }
 uint8_t KEY_A_SEQ[16];
 uint8_t KEY_B_SEQ[16];
 uint8_t ACL_BITS[16][4];
@@ -473,17 +371,21 @@ bool TestKeySeq(){
         return false;
       }
       if(!authA && nfc.authenticateBlock(1,id,i*4+3,KEY_A,keyList[k])){
+        Serial.print(i,DEC);
         Serial.println("A:Success");
         authA=true;
         KEY_A_SEQ[i]=k;
         uint8_t block[16];
         if(nfc.readMemoryBlock(1, i*4+3, block)){
-          ACL=true;
           for(uint8_t j=0; j<4; j++){
               ACL_BITS[i][j]=block[j+6];
           }
+        }else{
+          ErrorReport(i*4+3,"ACL Read Fail!!!");
+          return false;
         }
       }else if(!authA){
+        Serial.print(i,DEC);
         Serial.println("A:Fail");
         id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
         if(id==0){
@@ -492,20 +394,12 @@ bool TestKeySeq(){
         }
       }
       if(!authB && nfc.authenticateBlock(1,id,i*4+3,KEY_B,keyList[k])){
+        Serial.print(i,DEC);
         Serial.println("B:Success");
         authB=true;
         KEY_B_SEQ[i]=k;
-        uint8_t block[16];
-        if(!ACL && nfc.readMemoryBlock(1, i*4+3, block)){
-          ACL=true;
-          for(uint8_t j=0; j<4; j++){
-              ACL_BITS[i][j]=block[j+6];
-          }
-        }else if(!ACL){
-          ErrorReport(i*4+3,"ACL Failed");
-          return false;
-        }
       }else if(!authB){
+        Serial.print(i,DEC);
         Serial.println("B:Fail");
         id=nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
         if(id==0){
@@ -585,6 +479,63 @@ void NormalRead(){
   ReturnToMenu();
   return;
 }
+uint8_t buffer[32];
+void BridgeMode(){
+  lcd.begin(16,2);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Bridge Mode...  ");
+  lcd.setCursor(0,1);
+  lcd.print("Press RST exit  ");
+  Serial.begin(230400);  
+  Serial.flush();
+  nfc.begin();
+  while(1){
+    int b = Serial.available();
+    if (b >= 5){
+      Serial.readBytes((char*)buffer, 5);
+      if(buffer[0] == 0x55){
+        //handle wake up case
+        while(Serial.available() < 5); //wait the command
+        b = Serial.readBytes((char*)buffer+5, 5);
+        //send raw command to pn532
+        //get length of package : 
+        // (PREAMBLE + START + LEN + LCS) + (TFI + DATA[0...n]) + (DCS + POSTAMBLE)
+        uint8_t l = buffer[8] + 2;
+        while(Serial.available() < l); //wait the command
+        //read command from uart
+        Serial.readBytes((char*)buffer+10, l);
+        //send raw command to pn532
+        nfc.sendRawCommandCheckAck(buffer, l+10);
+        //read pn532 answer
+        nfc.readRawCommandAnswer(buffer, l+10);
+      }else{
+        //normal case
+        //get length of package : 
+        // (PREAMBLE + START + LEN + LCS) + (TFI + DATA[0...n]) + (DCS + POSTAMBLE)
+        uint8_t l = buffer[3] + 2;
+        //read command from uart
+      
+        //while(Serial.available() < l); //wait the command
+        //Serial.readBytes((char*)buffer+5, l);
+      
+        uint8_t br = l;
+        uint8_t* bufptr = buffer + 5;
+        while(br){
+          if(Serial.available()){
+            *bufptr++ = Serial.read();
+            --br;
+          }
+        }
+      
+        //send raw command to pn532
+        nfc.sendRawCommandCheckAck(buffer, l+5);
+        //read pn532 answer
+        nfc.readRawCommandAnswer(buffer, l+5);
+      }
+    }
+  }
+}
 void loop(void) {
   // uint32_t id;
   // id = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A);
@@ -639,6 +590,14 @@ void loop(void) {
             return;
           }
           break;
+        // case btnSELECT://DEBUG
+        //   delay(80);
+        //   if (_read_buttons() == btnNONE) {
+        //     Serial.println("key btnSELECT pressed");
+        //     BridgeMode();
+        //     return;
+        //   }
+        //   break;
       }  // statement
   }
 
