@@ -1,0 +1,73 @@
+#HALT
+:ReadRegister
+TX: 00 00 ff 06 fa d4 06 63 02 63 03 5b 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 04 fc d5 07 80 80 24 00
+:WriteRegister
+TX: 00 00 ff 08 f8 d4 08 63 02 00 63 03 00 59 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 02 fe d5 09 22 00
+:InCommunicateThru
+TX: 00 00 ff 06 fa d4 42 50 00 57 cd 76 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 03 fd d5 43 01 e7 00
+
+#UNLOCK1
+:ReadRegister
+TX: 00 00 ff 04 fc d4 06 63 3d 86 00
+PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 03 fd d5 07 00 24 00
+#PN53X_REG_CIU_BitFraming
+:WriteRegister
+TX: 00 00 ff 05 fb d4 08 63 3d 07 7d 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 02 fe d5 09 22 00
+:InCommunicateThru
+TX: 00 00 ff 03 fd d4 42 40 aa 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 04 fc d5 43 00 0a de 00
+#PN53X_REG_CIU_Control
+:ReadRegister
+TX: 00 00 ff 04 fc d4 06 63 3c 87 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 03 fd d5 07 14 10 00
+
+#UNLOCK2
+:ReadRegister
+TX: 00 00 ff 04 fc d4 06 63 3d 86 00
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 03 fd d5 07 07 1d 00
+:WriteRegister
+TX: 00 00 ff 05 fb d4 08 63 3d 00 84 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00 
+RX: 00 00 ff 02 fe d5 09 22 00
+#PN53X_REG_CIU_BitFraming
+:WriteRegister
+TX: 00 00 ff 05 fb d4 08 63 3d 00 84 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 02 fe d5 09 22 00
+:InCommunicateThru
+TX: 00 00 ff 03 fd d4 42 43 a7 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 04 fc d5 43 00 0a de 00
+
+:ReadRegister
+TX: 00 00 ff 06 fa d4 06 63 02 63 03 5b 00
+:PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 04 fc d5 07 00 00 24 00
+:WriteRegister
+:TX: 00 00 ff 08 f8 d4 08 63 02 80 63 03 80 59 00
+PN53x ACKed
+RX: 00 00 ff 00 ff 00
+RX: 00 00 ff 02 fe d5 09 22 00
