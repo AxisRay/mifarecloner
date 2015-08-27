@@ -9,13 +9,14 @@ PN532 nfc(PN532_CS);
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 #define  NFC_DEMO_DEBUG 1
 
-#define KEY_LIST_LENGTH 5
+#define KEY_LIST_LENGTH 6
 static uint8_t keyList[KEY_LIST_LENGTH][6] = {
   {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
   {0x0A, 0xCB, 0xC8, 0x5D, 0x55, 0x81},
   {0x01, 0x33, 0x03, 0x03, 0x23, 0x23},
-  {0xA9, 0xDE, 0x7F, 0x3C, 0xEB, 0x1F}
+  {0xA9, 0xDE, 0x7F, 0x3C, 0xEB, 0x1F},
+  {0xa0, 0x4d, 0xf2, 0x67, 0x5c, 0x69}
 };
 
 #define btnRIGHT  0
@@ -481,6 +482,7 @@ void NormalRead(){
 }
 uint8_t buffer[32];
 void BridgeMode(){
+  //bool autoSwitch=false;
   lcd.begin(16,2);
   lcd.clear();
   lcd.setCursor(0,0);
@@ -491,13 +493,11 @@ void BridgeMode(){
   Serial.flush();
   nfc.begin();
   while(1){
-    if(_read_buttons()==btnSELECT){
-        return;
-    }
     int b = Serial.available();
     if (b >= 5){
       Serial.readBytes((char*)buffer, 5);
       if(buffer[0] == 0x55){
+        //autoSwitch=false;
         //handle wake up case
         while(Serial.available() < 5); //wait the command
         b = Serial.readBytes((char*)buffer+5, 5);
@@ -536,6 +536,8 @@ void BridgeMode(){
         //read pn532 answer
         nfc.readRawCommandAnswer(buffer, l+5);
       }
+    }else if(/*autoSwitch||*/_read_buttons()==btnSELECT){
+      return;
     }
   }
 }
@@ -601,7 +603,12 @@ void loop(void) {
         //     return;
         //   }
         //   break;
-      }  // statement
+      }
+      int b = Serial.available();
+      if (b >= 5){
+        Serial.readBytes((char*)buffer+5, 5);
+      }
+        // statement
   }
 
 }
